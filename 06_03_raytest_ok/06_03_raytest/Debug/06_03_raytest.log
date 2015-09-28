@@ -1,0 +1,14 @@
+﻿生成启动时间为 2015/9/28 18:50:38。
+     1>项目“I:\raytrace\06_03_raytest\06_03_raytest\06_03_raytest.vcxproj”在节点 2 上(Build 个目标)。
+     1>ClCompile:
+         D:\Program Files\Microsoft Visual Studio 11.0\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /Od /Oy- /D _MBCS /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc110.pdb" /Gd /TP /analyze- /errorReport:prompt BaseWindow.cpp
+         BaseWindow.cpp
+       Link:
+         D:\Program Files\Microsoft Visual Studio 11.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"I:\raytrace\06_03_raytest\Debug\06_03_raytest.exe" /INCREMENTAL /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"I:\raytrace\06_03_raytest\Debug\06_03_raytest.pdb" /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"I:\raytrace\06_03_raytest\Debug\06_03_raytest.lib" /MACHINE:X86 Debug\main.obj
+         Debug\BaseWindow.obj
+         06_03_raytest.vcxproj -> I:\raytrace\06_03_raytest\Debug\06_03_raytest.exe
+     1>已完成生成项目“I:\raytrace\06_03_raytest\06_03_raytest\06_03_raytest.vcxproj”(Build 个目标)的操作。
+
+生成成功。
+
+已用时间 00:00:11.88

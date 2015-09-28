@@ -1,0 +1,329 @@
+#include <assert.h>
+#include <ctime>
+#include <cstdio>
+#include <iostream>
+#include "BaseWindow.h"
+
+//using namespace std;
+
+//此处可以考虑使用模板构造通用函数
+
+//C++11支持可变长度的参数函数模板，vs2012只是支持部分C++11特性。所以无法使用
+
+template <typename T>
+inline IntersectResult getGeometriesResult(const Ray3 ray, std::vector<T>& geometries);
+
+
+template <typename T>
+inline Color rayTraceReflection(Ray3 ray, int maxReflect, std::vector<T>& geometries);
+
+#if 0
+inline IntersectResult getGeometriesResult(Ray3 ray, Sphere sphere, Plane plane)
+{
+	IntersectResult result =  sphere.intersect(ray);
+	result =  result.distance < plane.intersect(ray).distance ? result : plane.intersect(ray);
+	return result;
+}
+
+
+inline Color rayTraceReflection(Ray3 ray, int maxReflect, Sphere sphere, Plane plane)
+{
+	auto result = getGeometriesResult(ray, sphere, plane);
+	//auto result = plane.intersect(ray);
+
+	if (result.geometry)
+	{
+		auto reflect = result.material->getReflect();
+		auto color = result.material->sample(ray, result.position, result.normal);
+		color = color.multiply(1 - reflect);
+
+		if (reflect > 0 && maxReflect > 0)
+		{
+			auto r = result.normal.multiply(-2 * result.normal.dot(ray.direction)).add(ray.direction);
+			ray = Ray3(result.position, r);
+			auto reflectedColor = rayTraceReflection(ray, maxReflect - 1, sphere, plane);
+			color = color.add(reflectedColor.multiply(reflect));
+		}
+		return color;
+	}
+	return Color(0, 0, 0);
+}
+#endif
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	HDC hdc;
+	PAINTSTRUCT ps;
+	switch (msg)
+	{
+	case WM_CREATE:
+		return 0;
+	case WM_PAINT:
+		hdc = BeginPaint(hwnd, &ps);
+		EndPaint(hwnd, &ps);
+		return 0;
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		return 0;
+	}
+
+	return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+BOOL BaseWindow::Create(LPCTSTR lpszClass, LPCTSTR lpszName, DWORD dwStyle,
+	int x, int y, int nWidth, int nHeight, HWND hParent, HMENU hMenu, HINSTANCE hInst)
+{
+	WNDCLASS wc;
+
+	wc.style = dwStyle;
+	wc.lpfnWndProc = WndProc;
+	wc.cbClsExtra = 0;
+	wc.cbWndExtra = 0;
+	wc.hInstance = hInst;
+	wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+	wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
+	wc.lpszClassName = lpszClass;
+	wc.lpszMenuName = NULL;
+
+	if (!RegisterClass(&wc))  // 注册窗口
+	{
+		MessageBox(NULL, TEXT("Register WNDCLASS error!"), 
+			lpszClass, MB_ICONERROR);
+		return FALSE;
+	}
+
+
+	m_hwnd = CreateWindowEx( 0, lpszClass, lpszName, WS_OVERLAPPEDWINDOW, x, y,
+		nWidth, nHeight, hParent, hMenu, hInst, NULL);
+
+	m_width = nWidth;
+	m_height = nHeight;
+
+	MoveWindow(m_hwnd, 
+		GetSystemMetrics(SM_CXSCREEN) / 2 - nWidth / 2,   //    居中
+		GetSystemMetrics(SM_CYSCREEN) / 2 - nHeight / 2,   
+		nWidth, nHeight, FALSE);
+
+	return m_hwnd != NULL;
+}
+
+BOOL BaseWindow::Create(int nWidth, int nHeight, HINSTANCE hInst)
+{
+	const TCHAR szClass[] = TEXT("LWindow Application");
+	const TCHAR szName[] = TEXT("Tay_Test");
+	return Create(szClass, szName, CS_HREDRAW | CS_VREDRAW,
+		CW_USEDEFAULT, CW_USEDEFAULT, nWidth, nHeight, NULL, NULL, hInst);
+}
+
+
+
+HBITMAP BaseWindow::CreateDIB()
+{
+	BITMAPINFO* Info = (BITMAPINFO*)malloc(sizeof(BITMAPINFOHEADER) + 2 * sizeof(RGBQUAD));
+	BITMAPINFOHEADER* bmih = &Info->bmiHeader;
+	BYTE *pBits;
+	HBITMAP hBitmap;
+
+	bmih->biSize = sizeof(BITMAPINFOHEADER);
+	bmih->biWidth = m_width;
+	bmih->biHeight = m_height;
+	bmih->biPlanes = 1;
+	bmih->biBitCount = 24;
+	bmih->biCompression = BI_RGB;
+	bmih->biSizeImage = 0;
+	bmih->biXPelsPerMeter = 0;
+	bmih->biYPelsPerMeter = 0;
+	bmih->biClrUsed = 0;
+	bmih->biClrImportant = 0;
+
+	hBitmap = CreateDIBSection(NULL, Info, DIB_RGB_COLORS, (void **)&pBits, NULL, 0);
+	
+	int BytesPerLine = m_width * 3;
+	if (BytesPerLine % 4 != 0)
+		BytesPerLine += 4 - BytesPerLine % 4;
+	//位图存储是从左下方开始的  所以从最下面一行开始存
+	ScanLine = new PBYTE[m_height];
+	for (int i = 0; i < m_height; i++)
+	{
+		ScanLine[m_height - i - 1] = pBits + BytesPerLine * i;  //每行的起始位置
+	}
+
+	return hBitmap;
+}
+
+WPARAM BaseWindow::MsgLoop(void)
+{
+	MSG msg;
+	HBITMAP hBitmap;
+	
+	ShowWindow(m_hwnd, SW_SHOWNORMAL);
+	UpdateWindow(m_hwnd);
+
+	m_hDC = GetDC(m_hwnd);
+	m_hDCmem = CreateCompatibleDC(m_hDC);
+
+	hBitmap = CreateDIB();
+	SelectObject(m_hDCmem, hBitmap);
+
+	Render();
+//	Render_base();
+	while (GetMessage(&msg, NULL, 0, 0))
+	{
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
+
+	ReleaseDC(m_hwnd, m_hDC);
+	DeleteDC(m_hDCmem);
+	DeleteObject(hBitmap);
+
+	return msg.wParam;
+}
+
+//每个象素填入颜色，左至右越来越红，上至下越来越绿
+void BaseWindow::Render_base(void)   
+{
+	if (m_width == 0 || m_height == 0)
+		return;
+
+	Pixel pixel;
+
+	auto start = clock();
+
+	for (int y = 0; y < m_height; y++)
+	{
+		
+		pixel.setPoint(ScanLine[y]);
+
+		for (double x = 0; x < m_width; x++)
+		{
+
+
+			pixel.setR( x / m_width   * 255);
+			pixel.setG( (float)y / m_height * 255);
+			pixel.setB( 0 * 255);
+
+			pixel.Next();
+		}
+	}
+
+	BitBlt(m_hDC, 0, 0, m_width, m_height,
+		m_hDCmem, 0, 0, SRCCOPY);
+
+	TCHAR test[100];
+	sprintf_s(test, "render time : %1.1f ms", (float)(clock() - start) );
+	MessageBox(NULL, test, TEXT("test"), 0);
+
+}
+
+void BaseWindow::Render(void)
+{
+	if (m_width == 0 || m_height == 0)
+		return;
+
+	Pixel pixel;
+	Color color;
+	Ray3 ray;
+	IntersectResult result, result1, result2;
+	double sx, sy;
+	int f = 0;
+
+	Sphere sphere1 = Sphere(Vector3(-15, 10, -5), 5);
+	Sphere sphere2 = Sphere(Vector3(15, 10, -5), 5);
+	Sphere sphere3 = Sphere(Vector3(-10, 10, -20), 5);
+	Sphere sphere4 = Sphere(Vector3(10, 10, -20), 5);
+
+	auto plane = Plane(Vector3(0, 1, 0), 0);
+	auto camera = Camera(Vector3(0, 10, 20), Vector3(0, 0, -1), Vector3(0, 1, 0), 90);
+
+	sphere1.initialize();
+	sphere2.initialize();
+	sphere3.initialize();
+	sphere4.initialize();
+	plane.initialize();
+	camera.initialize();
+
+	sphere1.material = new PhongMaterial(Color(1, 0, 0), Color(1, 1, 1), 26, 0.25); //红
+	sphere2.material = new PhongMaterial(Color(0, 1, 0), Color(1, 1, 1), 26, 0.25); // 绿
+	sphere3.material = new PhongMaterial(Color(0, 0, 1), Color(1, 1, 1), 26, 0.25);// 蓝
+	sphere4.material = new PhongMaterial(Color(1, 1, 0), Color(1, 1, 1), 26, 0.25);
+	plane.material = new CheckerMaterial(0.1, 0.25);
+
+	
+
+	std::vector<Model*> geometries;
+	geometries.push_back(&sphere1);
+	geometries.push_back(&sphere2);
+	geometries.push_back(&sphere3);
+	geometries.push_back(&sphere4);
+	geometries.push_back(&plane);
+
+	auto start = clock();
+	
+	for (int y = 0; y < m_height; y++)
+	{
+		pixel.setPoint(ScanLine[y]);
+		sy = 1 - (double)y / m_height;
+		for (double x = 0; x < m_width; x++)
+		{
+			sx = x / m_width;
+			ray = camera.generateRay(sx, sy);
+		//	color = rayTraceReflection(ray, 2, sphere1,  plane);
+			color = rayTraceReflection(ray, 2, geometries);
+			pixel.setR(color.getR() * 255);
+			pixel.setG(color.getG() * 255);
+			pixel.setB(color.getB() * 255);
+						pixel.Next();
+		}
+	}
+
+	BitBlt(m_hDC, 0, 0, m_width, m_height,
+		m_hDCmem, 0, 0, SRCCOPY);
+
+	TCHAR test[100];
+	sprintf_s(test, "render time : %1.1f s", (float)(clock() - start) / 1000);
+	MessageBox(NULL, test, TEXT("test"), 0);
+
+}
+
+
+template <typename T>
+inline IntersectResult getGeometriesResult(const Ray3 ray, std::vector<T>& geometries)
+{
+	auto result = geometries[0]->intersect(ray);
+	// operator[] access faster, still slower than template version
+	for (size_t i = 0; i < geometries.size(); i++)	
+	{
+		result = result.distance < geometries[i]->intersect(ray).distance ? result : geometries[i]->intersect(ray);
+	}
+	/*for (auto &g : geometries)
+	{
+		result = result.distance < g->intersect(ray).distance ? result : g->intersect(ray);
+	}*/
+
+	return result;
+}
+
+
+template <typename T>
+inline Color rayTraceReflection(Ray3 ray, int maxReflect, std::vector<T>& geometries)
+{
+	auto result = getGeometriesResult(ray, geometries);
+
+	if (result.geometry)
+	{
+		auto reflect = result.material->getReflect();
+		auto color = result.material->sample(ray, result.position, result.normal);
+		color = color.multiply(1 - reflect);
+
+		if (reflect > 0 && maxReflect > 0)
+		{
+			auto r = result.normal.multiply(-2 * result.normal.dot(ray.direction)).add(ray.direction);
+			ray = Ray3(result.position, r);
+			auto reflectedColor = rayTraceReflection(ray, maxReflect - 1, geometries);
+			color = color.add(reflectedColor.multiply(reflect));
+		}
+		return color;
+	}
+	return Color(0, 0, 0);
+}
